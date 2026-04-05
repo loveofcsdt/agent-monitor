@@ -430,6 +430,7 @@ function renderAgent(agent) {
   const typeName = agent.type === 'openclaw' ? 'OpenClaw' : 'Claude Code';
   const isSelected = selectedAgentId === agent.id;
   const canClick = agent.type === 'claude_code' && agent.working_dir;
+  const sid = agent.session_id || '';
 
   let contextHtml = '';
   if (agent.context_percent != null) {
@@ -445,7 +446,7 @@ function renderAgent(agent) {
   }
 
   const clickHandler = canClick
-    ? `onclick="selectAgent('${agent.id}', '${escapeHtml(agent.working_dir)}', '${escapeHtml(typeName)}', event)"`
+    ? `onclick="selectAgent('${agent.id}', '${escapeHtml(agent.working_dir)}', '${escapeHtml(typeName)}', '${sid}', event)"`
     : '';
 
   return `
@@ -508,7 +509,7 @@ function toggleMachine(header) {
 
 // ── Detail panel ──
 
-async function selectAgent(agentId, cwd, typeName, event) {
+async function selectAgent(agentId, cwd, typeName, sessionId, event) {
   event.stopPropagation();
   selectedAgentId = agentId;
 
@@ -525,7 +526,9 @@ async function selectAgent(agentId, cwd, typeName, event) {
   panel.classList.add('open');
 
   try {
-    const resp = await fetch(`/api/session?cwd=${encodeURIComponent(cwd)}`);
+    let url = `/api/session?cwd=${encodeURIComponent(cwd)}`;
+    if (sessionId) url += `&session_id=${encodeURIComponent(sessionId)}`;
+    const resp = await fetch(url);
     const data = await resp.json();
 
     if (!data.messages || data.messages.length === 0) {

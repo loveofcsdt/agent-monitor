@@ -186,47 +186,9 @@ async def _get_cwd(pid: int) -> str:
     return ""
 
 
-def _find_session_for_cwd(cwd: str) -> Optional[dict]:
-    """Find the most recent Claude Code session for a working directory.
-
-    Returns dict with keys: session_id, model, context_tokens, context_window,
-    context_percent, first_user_message.
-    """
-    if not cwd or not CLAUDE_HOME.exists():
-        return None
-
-    # Claude Code encodes project path as directory name
-    # e.g. /Users/foo/bar -> -Users-foo-bar
-    encoded = cwd.replace("/", "-")
-    project_dir = CLAUDE_HOME / "projects" / encoded
-
-    if not project_dir.is_dir():
-        return None
-
-    # Find the active session (session_id file or most recent .jsonl)
-    session_id = None
-    session_id_file = project_dir / "session_id"
-    if session_id_file.exists():
-        session_id = session_id_file.read_text().strip()
-
-    # Find session file
-    session_file = None
-    if session_id:
-        candidate = project_dir / f"{session_id}.jsonl"
-        if candidate.exists():
-            session_file = candidate
-
-    if not session_file:
-        # Fall back to most recently modified .jsonl
-        jsonl_files = sorted(project_dir.glob("*.jsonl"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if jsonl_files:
-            session_file = jsonl_files[0]
-            session_id = session_file.stem
-
-    if not session_file:
-        return None
-
-    # Parse the session file — read from the end for efficiency
+def _parse_session_file(session_file: Path) -> Optional[dict]:
+    """Parse a single session JSONL file and extract key info."""
+    session_id = session_file.stem
     model = ""
     total_input = 0
     first_user_msg = ""
@@ -248,7 +210,6 @@ def _find_session_for_cwd(cwd: str) -> Optional[dict]:
                     model = msg.get("model", "")
                     usage = msg.get("usage", {})
                     if usage:
-                        # Most recent usage gives us cumulative context size
                         total_input = (
                             usage.get("input_tokens", 0)
                             + usage.get("cache_creation_input_tokens", 0)
@@ -269,7 +230,6 @@ def _find_session_for_cwd(cwd: str) -> Optional[dict]:
             if model and last_user_msg:
                 break
 
-        # Get first user message for context
         for line in lines:
             try:
                 entry = json.loads(line)
@@ -291,19 +251,66 @@ def _find_session_for_cwd(cwd: str) -> Optional[dict]:
     except Exception:
         return None
 
-    context_window = MODEL_CONTEXT_WINDOWS.get(model, DEFAULT_CONTEXT_WINDOW)
-    context_percent = round(total_input / context_window * 100, 1) if context_window else None
+    ctx_win = MODEL_CONTEXT_WINDOWS.get(model, DEFAULT_CONTEXT_WINDOW)
+    ctx_pct = round(total_input / ctx_win * 100, 1) if ctx_win else None
 
     return {
-        "session_id": session_id or "",
+        "session_id": session_id,
         "model": model,
         "context_tokens": total_input,
-        "context_window": context_window,
-        "context_percent": context_percent,
+        "context_window": ctx_win,
+        "context_percent": ctx_pct,
         "first_user_message": first_user_msg,
         "last_user_message": last_user_msg,
         "message_count": len(lines),
+        "mtime": session_file.stat().st_mtime,
     }
+
+
+def _get_project_dir(cwd: str) -> Optional[Path]:
+    """Get the Claude Code project directory for a working directory."""
+    if not cwd or not CLAUDE_HOME.exists():
+        return None
+    encoded = cwd.replace("/", "-")
+    project_dir = CLAUDE_HOME / "projects" / encoded
+    return project_dir if project_dir.is_dir() else None
+
+
+def _find_session_for_cwd(cwd: str) -> Optional[dict]:
+    """Find the most recent Claude Code session for a cwd.
+
+    Convenience wrapper for single-session lookup (used by summarizer).
+    """
+    project_dir = _get_project_dir(cwd)
+    if not project_dir:
+        return None
+    jsonl_files = sorted(
+        project_dir.glob("*.jsonl"),
+        key=lambda f: f.stat().st_mtime, reverse=True,
+    )
+    if not jsonl_files:
+        return None
+    return _parse_session_file(jsonl_files[0])
+
+
+def _find_recent_sessions(cwd: str, count: int) -> list[dict]:
+    """Find the N most recently active sessions for a cwd.
+
+    Returns list sorted by mtime descending (most recent first).
+    """
+    project_dir = _get_project_dir(cwd)
+    if not project_dir:
+        return []
+    jsonl_files = sorted(
+        project_dir.glob("*.jsonl"),
+        key=lambda f: f.stat().st_mtime, reverse=True,
+    )
+    results = []
+    for jf in jsonl_files[:count]:
+        parsed = _parse_session_file(jf)
+        if parsed:
+            results.append(parsed)
+    return results
 
 
 async def collect_local(machine_id: str = "local") -> list[AgentNode]:
@@ -350,15 +357,28 @@ async def collect_local(machine_id: str = "local") -> list[AgentNode]:
     for agent in agents:
         agent.working_dir = cwds.get(agent.pid, "")
 
-        # Enrich Claude Code agents with session data
+    # Match Claude Code agents to their sessions.
+    # Group by cwd, then match N agents to N most recent sessions
+    # by sorting both: processes by PID descending (newer PID = newer
+    # process), sessions by mtime descending (most recently written).
+    cc_by_cwd: dict[str, list[AgentNode]] = {}
+    for agent in agents:
         if agent.type == "claude_code" and agent.working_dir:
-            session = _find_session_for_cwd(agent.working_dir)
-            if session:
-                agent.session_id = session["session_id"]
-                agent.model = session["model"]
-                agent.context_tokens = session["context_tokens"]
-                agent.context_window = session["context_window"]
-                agent.context_percent = session["context_percent"]
+            cc_by_cwd.setdefault(agent.working_dir, []).append(agent)
+
+    for wd, cc_agents in cc_by_cwd.items():
+        sessions = _find_recent_sessions(wd, len(cc_agents))
+        # Sort agents by PID desc (newer process = higher PID typically)
+        cc_agents.sort(key=lambda a: a.pid, reverse=True)
+        # sessions already sorted by mtime desc
+        for i, agent in enumerate(cc_agents):
+            if i < len(sessions):
+                s = sessions[i]
+                agent.session_id = s["session_id"]
+                agent.model = s["model"]
+                agent.context_tokens = s["context_tokens"]
+                agent.context_window = s["context_window"]
+                agent.context_percent = s["context_percent"]
 
     return _build_tree(agents, all_procs, machine_id)
 
@@ -415,32 +435,8 @@ def get_cwd(pid):
     except: pass
     return ""
 
-def get_session(cwd):
-    if not cwd or not os.path.isdir(CLAUDE_HOME): return None
-    encoded = cwd.replace("/", "-")
-    pdir = os.path.join(CLAUDE_HOME, "projects", encoded)
-    if not os.path.isdir(pdir): return None
-
-    sid = None
-    sf = os.path.join(pdir, "session_id")
-    if os.path.exists(sf):
-        with open(sf) as f: sid = f.read().strip()
-
-    session_file = None
-    if sid:
-        c = os.path.join(pdir, f"{sid}.jsonl")
-        if os.path.exists(c): session_file = c
-
-    if not session_file:
-        import glob
-        files = sorted(glob.glob(os.path.join(pdir, "*.jsonl")),
-                       key=os.path.getmtime, reverse=True)
-        if files:
-            session_file = files[0]
-            sid = os.path.splitext(os.path.basename(files[0]))[0]
-
-    if not session_file: return None
-
+def parse_session(session_file):
+    sid = os.path.splitext(os.path.basename(session_file))[0]
     model = ""; total_input = 0; first_msg = ""; last_msg = ""
     try:
         with open(session_file) as f: lines = f.readlines()
@@ -467,7 +463,6 @@ def get_session(cwd):
                             last_msg = x["text"][:500]; break
                 elif isinstance(c, str): last_msg = c[:500]
             if model and last_msg: break
-
         for line in lines:
             try: e = json.loads(line)
             except: continue
@@ -481,13 +476,26 @@ def get_session(cwd):
                 elif isinstance(c, str): first_msg = c[:500]
                 if first_msg: break
     except: return None
-
     ctx_win = MODEL_CTX.get(model, 200000)
-    return {"session_id": sid or "", "model": model, "context_tokens": total_input,
-            "context_window": ctx_win,
+    return {"session_id": sid, "model": model, "context_tokens": total_input,
+            "context_window": ctx_win, "message_count": len(lines),
             "context_percent": round(total_input/ctx_win*100,1) if ctx_win else None,
             "first_user_message": first_msg, "last_user_message": last_msg,
-            "message_count": len(lines)}
+            "mtime": os.path.getmtime(session_file)}
+
+def get_recent_sessions(cwd, count):
+    if not cwd or not os.path.isdir(CLAUDE_HOME): return []
+    encoded = cwd.replace("/", "-")
+    pdir = os.path.join(CLAUDE_HOME, "projects", encoded)
+    if not os.path.isdir(pdir): return []
+    import glob
+    files = sorted(glob.glob(os.path.join(pdir, "*.jsonl")),
+                   key=os.path.getmtime, reverse=True)
+    results = []
+    for f in files[:count]:
+        s = parse_session(f)
+        if s: results.append(s)
+    return results
 
 def main():
     r = subprocess.run(["ps","-eo","pid=,ppid=,args="], capture_output=True, text=True)
@@ -504,9 +512,21 @@ def main():
         is_oc = bool(re.search(r"openclaw-gateway|Genspark Claw.app/Contents/MacOS/Genspark Claw$|acpx\b", cmd, re.I))
         if is_cc or is_oc:
             cwd = get_cwd(pid)
-            session = get_session(cwd) if is_cc else None
             agents.append({"pid":pid,"ppid":ppid,"type":"openclaw" if is_oc else "claude_code",
-                          "command":cmd[:300],"working_dir":cwd,"session":session})
+                          "command":cmd[:300],"working_dir":cwd,"session":None})
+
+    # Match claude_code agents to sessions (same cwd = match by recency)
+    from collections import defaultdict
+    cc_by_cwd = defaultdict(list)
+    for a in agents:
+        if a["type"] == "claude_code" and a["working_dir"]:
+            cc_by_cwd[a["working_dir"]].append(a)
+    for wd, cc_agents in cc_by_cwd.items():
+        sessions = get_recent_sessions(wd, len(cc_agents))
+        cc_agents.sort(key=lambda x: x["pid"], reverse=True)
+        for i, a in enumerate(cc_agents):
+            if i < len(sessions):
+                a["session"] = sessions[i]
 
     print(json.dumps({"agents":agents,"all_procs":{str(k):v for k,v in all_procs.items()}}))
 
@@ -825,22 +845,15 @@ def _extract_pr_links(text: str) -> list[str]:
     return list(dict.fromkeys(links))  # dedupe preserving order
 
 
-def _read_session_messages(cwd: str) -> list[dict]:
-    """Read session messages, returning user msgs + last assistant text."""
-    if not cwd or not CLAUDE_HOME.exists():
+def _read_session_messages(
+    cwd: str, session_id: str = ""
+) -> list[dict]:
+    """Read session messages for a specific session or the most recent one."""
+    project_dir = _get_project_dir(cwd)
+    if not project_dir:
         return []
 
-    encoded = cwd.replace("/", "-")
-    project_dir = CLAUDE_HOME / "projects" / encoded
-    if not project_dir.is_dir():
-        return []
-
-    # Find active session
-    session_id = None
-    sid_file = project_dir / "session_id"
-    if sid_file.exists():
-        session_id = sid_file.read_text().strip()
-
+    # Find session file: prefer explicit session_id, else most recent
     session_file = None
     if session_id:
         candidate = project_dir / f"{session_id}.jsonl"
@@ -907,12 +920,12 @@ def _read_session_messages(cwd: str) -> list[dict]:
 
 
 @app.get("/api/session")
-async def get_session_messages(cwd: str = ""):
-    """Return conversation messages for a Claude Code session."""
+async def get_session_messages(cwd: str = "", session_id: str = ""):
+    """Return conversation messages for a specific Claude Code session."""
     if not cwd:
         return {"messages": [], "error": "cwd required"}
 
-    messages = _read_session_messages(cwd)
+    messages = _read_session_messages(cwd, session_id)
     return {"messages": messages, "total": len(messages)}
 
 
