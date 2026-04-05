@@ -1,0 +1,20 @@
+# Agent Monitor Configuration
+#
+# Copy to config.yaml and edit:
+#   cp config.example.yaml config.yaml
+
+# Remote machines to monitor (via SSH)
+machines:
+  # Example: another laptop
+  # - name: "MacBook-Studio"
+  #   host: "192.168.1.100"
+  #   ssh_args: ["-p", "22", "-i", "~/.ssh/id_rsa"]
+
+  # Example: via SSH tunnel / jump host
+  # - name: "Dev Server"
+  #   host: "dev-box"          # must be resolvable (ssh config alias works)
+  #   ssh_args: ["-J", "jumphost"]
+
+  # Example: via tailscale / zerotier
+  # - name: "Home Server"
+  #   host: "100.64.0.5"

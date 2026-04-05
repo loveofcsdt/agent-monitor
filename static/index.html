@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Monitor</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --yellow: #d29922;
+    --bar-bg: #21262d;
+    --bar-fill: #238636;
+    --bar-warn: #d29922;
+    --bar-crit: #f85149;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 24px;
+    min-height: 100vh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  header h1 {
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .refresh-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .refresh-btn:hover { border-color: var(--text-dim); }
+
+  .auto-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .auto-toggle input { accent-color: var(--green); }
+
+  .loading {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--yellow);
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+
+  /* Machine sections */
+  .machine {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+
+  .machine-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .machine-header:hover { background: rgba(255,255,255,0.03); }
+
+  .machine-name {
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .machine-name .chevron {
+    font-size: 12px;
+    transition: transform 0.15s;
+    color: var(--text-dim);
+  }
+  .machine.collapsed .chevron { transform: rotate(-90deg); }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .status-dot.online { background: var(--green); }
+  .status-dot.offline { background: var(--red); }
+
+  .machine-meta {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .machine-body {
+    padding: 0 16px 16px;
+  }
+  .machine.collapsed .machine-body { display: none; }
+
+  .machine-error {
+    color: var(--red);
+    font-size: 13px;
+    padding: 8px 12px;
+    background: rgba(248, 81, 73, 0.1);
+    border-radius: 6px;
+  }
+
+  .empty-state {
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: center;
+    padding: 24px;
+  }
+
+  /* Agent nodes */
+  .agent-node {
+    position: relative;
+    padding-left: 20px;
+  }
+
+  .agent-node:before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .agent-node:last-child:before {
+    bottom: calc(100% - 20px);
+  }
+
+  .agent-node > .agent-card:before {
+    content: '';
+    position: absolute;
+    left: -14px;
+    top: 18px;
+    width: 12px;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Top-level agents have no tree line */
+  .agent-tree > .agent-node {
+    padding-left: 0;
+  }
+  .agent-tree > .agent-node:before,
+  .agent-tree > .agent-node > .agent-card:before {
+    display: none;
+  }
+
+  .agent-card {
+    position: relative;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+  }
+
+  .agent-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .agent-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .agent-type {
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .agent-pid {
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--bar-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+
+  .agent-model {
+    font-size: 11px;
+    color: var(--blue);
+    background: rgba(88, 166, 255, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  .agent-summary {
+    font-size: 13px;
+    color: var(--text);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  .agent-dir {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    font-family: 'SF Mono', Menlo, monospace;
+    word-break: break-all;
+  }
+
+  /* Context bar */
+  .context-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .context-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    min-width: 42px;
+  }
+
+  .context-bar {
+    flex: 1;
+    height: 6px;
+    background: var(--bar-bg);
+    border-radius: 3px;
+    overflow: hidden;
+    max-width: 200px;
+  }
+
+  .context-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+
+  .context-fill.low { background: var(--bar-fill); }
+  .context-fill.mid { background: var(--bar-warn); }
+  .context-fill.high { background: var(--bar-crit); }
+
+  .context-tokens {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+
+  .children {
+    margin-top: 8px;
+    margin-left: 8px;
+  }
+
+  /* Footer */
+  footer {
+    margin-top: 32px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Agent Monitor</h1>
+    <div class="header-right">
+      <span id="status-indicator"></span>
+      <span id="last-updated"></span>
+      <label class="auto-toggle">
+        <input type="checkbox" id="auto-refresh" checked>
+        Auto (5s)
+      </label>
+      <button class="refresh-btn" onclick="refresh()">Refresh</button>
+    </div>
+  </header>
+
+  <main id="content">
+    <div class="empty-state">Loading...</div>
+  </main>
+
+  <footer>Agent Monitor — OpenClaw & Claude Code Dashboard</footer>
+
+<script>
+const REFRESH_MS = 5000;
+let autoRefreshTimer = null;
+let isLoading = false;
+
+function formatTokens(n) {
+  if (n == null) return '?';
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
+  return n.toString();
+}
+
+function contextFillClass(pct) {
+  if (pct >= 80) return 'high';
+  if (pct >= 50) return 'mid';
+  return 'low';
+}
+
+function renderAgent(agent, isRoot) {
+  const icon = agent.type === 'openclaw' ? '🤖' : '💻';
+  const typeName = agent.type === 'openclaw' ? 'OpenClaw' : 'Claude Code';
+
+  let contextHtml = '';
+  if (agent.context_percent != null) {
+    const pct = Math.min(agent.context_percent, 100);
+    const cls = contextFillClass(pct);
+    contextHtml = `
+      <div class="context-row">
+        <span class="context-label">${pct.toFixed(1)}%</span>
+        <div class="context-bar">
+          <div class="context-fill ${cls}" style="width:${pct}%"></div>
+        </div>
+        <span class="context-tokens">${formatTokens(agent.context_tokens)} / ${formatTokens(agent.context_window)}</span>
+      </div>`;
+  }
+
+  const modelHtml = agent.model
+    ? `<span class="agent-model">${agent.model}</span>`
+    : '';
+
+  const summaryHtml = agent.summary
+    ? `<div class="agent-summary">${escapeHtml(agent.summary)}</div>`
+    : '';
+
+  const dirHtml = agent.working_dir
+    ? `<div class="agent-dir">${escapeHtml(agent.working_dir)}</div>`
+    : '';
+
+  const childrenHtml = agent.children.length > 0
+    ? `<div class="children">${agent.children.map(c => renderAgent(c, false)).join('')}</div>`
+    : '';
+
+  return `
+    <div class="agent-node">
+      <div class="agent-card">
+        <div class="agent-top">
+          <span class="agent-icon">${icon}</span>
+          <span class="agent-type">${typeName}</span>
+          <span class="agent-pid">PID ${agent.pid}</span>
+          ${modelHtml}
+        </div>
+        ${summaryHtml}
+        ${contextHtml}
+        ${dirHtml}
+      </div>
+      ${childrenHtml}
+    </div>`;
+}
+
+function renderMachine(machine) {
+  const isOnline = machine.status === 'connected';
+  const dotClass = isOnline ? 'online' : 'offline';
+  const hostLabel = machine.host === 'local' ? '' : ` (${machine.host})`;
+  const agentCount = countAgents(machine.agents);
+
+  let bodyHtml = '';
+  if (machine.error) {
+    bodyHtml = `<div class="machine-error">${escapeHtml(machine.error)}</div>`;
+  } else if (machine.agents.length === 0) {
+    bodyHtml = `<div class="empty-state">No agents running</div>`;
+  } else {
+    bodyHtml = `<div class="agent-tree">${machine.agents.map(a => renderAgent(a, true)).join('')}</div>`;
+  }
+
+  return `
+    <div class="machine" id="machine-${escapeAttr(machine.name)}">
+      <div class="machine-header" onclick="toggleMachine(this)">
+        <div class="machine-name">
+          <span class="chevron">▼</span>
+          <span class="status-dot ${dotClass}"></span>
+          ${escapeHtml(machine.name)}${escapeHtml(hostLabel)}
+        </div>
+        <div class="machine-meta">${agentCount} agent${agentCount !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="machine-body">${bodyHtml}</div>
+    </div>`;
+}
+
+function countAgents(agents) {
+  let n = agents.length;
+  for (const a of agents) n += countAgents(a.children);
+  return n;
+}
+
+function toggleMachine(header) {
+  header.parentElement.classList.toggle('collapsed');
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escapeAttr(s) {
+  return s.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+async function refresh() {
+  if (isLoading) return;
+  isLoading = true;
+  document.getElementById('status-indicator').innerHTML = '<span class="loading"></span>';
+
+  try {
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
+
+    const content = document.getElementById('content');
+    if (data.machines.length === 0) {
+      content.innerHTML = '<div class="empty-state">No machines configured</div>';
+    } else {
+      // Remember collapsed state
+      const collapsed = new Set();
+      document.querySelectorAll('.machine.collapsed').forEach(el => collapsed.add(el.id));
+
+      content.innerHTML = data.machines.map(m => renderMachine(m)).join('');
+
+      // Restore collapsed state
+      collapsed.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('collapsed');
+      });
+    }
+
+    const t = new Date(data.updated_at);
+    document.getElementById('last-updated').textContent =
+      t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    document.getElementById('status-indicator').innerHTML = '';
+
+  } catch (e) {
+    document.getElementById('status-indicator').innerHTML =
+      `<span style="color:var(--red);font-size:12px">Error: ${e.message}</span>`;
+  } finally {
+    isLoading = false;
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(refresh, REFRESH_MS);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
+document.getElementById('auto-refresh').addEventListener('change', function() {
+  if (this.checked) startAutoRefresh();
+  else stopAutoRefresh();
+});
+
+// Initial load
+refresh();
+startAutoRefresh();
+</script>
+</body>
+</html>
