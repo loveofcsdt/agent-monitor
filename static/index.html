@@ -28,23 +28,21 @@
     background: var(--bg);
     color: var(--text);
     line-height: 1.5;
-    padding: 24px;
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
 
   header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
+    padding: 16px 24px;
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
   }
 
-  header h1 {
-    font-size: 20px;
-    font-weight: 600;
-  }
+  header h1 { font-size: 20px; font-weight: 600; }
 
   .header-right {
     display: flex;
@@ -66,23 +64,159 @@
   .refresh-btn:hover { border-color: var(--text-dim); }
 
   .auto-toggle {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    user-select: none;
+    display: flex; align-items: center; gap: 6px;
+    cursor: pointer; user-select: none;
   }
   .auto-toggle input { accent-color: var(--green); }
 
   .loading {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--yellow);
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--yellow);
     animation: pulse 1s infinite;
   }
-  @keyframes pulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+  @keyframes pulse { 0%,100% { opacity:.3; } 50% { opacity:1; } }
+
+  /* Layout: left list + right detail */
+  .main-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .agent-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    min-width: 0;
+  }
+
+  .detail-panel {
+    width: 0;
+    overflow: hidden;
+    border-left: 1px solid var(--border);
+    background: var(--card);
+    transition: width 0.2s;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .detail-panel.open { width: 480px; }
+
+  .detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .detail-header h2 { font-size: 14px; font-weight: 600; }
+  .detail-close {
+    background: none; border: none; color: var(--text-dim);
+    font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 4px;
+  }
+  .detail-close:hover { background: var(--bar-bg); color: var(--text); }
+
+  .detail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+  }
+
+  .detail-loading {
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: center;
+    padding: 32px;
+  }
+
+  /* Message items in detail panel */
+  .msg-item {
+    margin-bottom: 12px;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .msg-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+  }
+  .msg-header:hover { filter: brightness(1.15); }
+
+  .msg-item.user .msg-header { background: rgba(88,166,255,0.12); }
+  .msg-item.assistant .msg-header { background: rgba(63,185,80,0.12); }
+
+  .msg-role {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .msg-item.user .msg-role { color: var(--blue); }
+  .msg-item.assistant .msg-role { color: var(--green); }
+
+  .msg-time {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+
+  .msg-chevron {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 10px;
+    transition: transform 0.15s;
+  }
+  .msg-item.collapsed .msg-chevron { transform: rotate(-90deg); }
+
+  .msg-preview {
+    color: var(--text-dim);
+    font-size: 12px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .msg-body {
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: rgba(255,255,255,0.02);
+    border-top: 1px solid var(--border);
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .msg-item.collapsed .msg-body { display: none; }
+
+  .msg-pr-links {
+    padding: 4px 10px 8px;
+    background: rgba(255,255,255,0.02);
+  }
+  .msg-item.collapsed .msg-pr-links { display: none; }
+
+  .pr-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--blue);
+    text-decoration: none;
+    background: rgba(88,166,255,0.08);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 6px;
+    margin-bottom: 4px;
+  }
+  .pr-link:hover { background: rgba(88,166,255,0.18); }
 
   /* Machine sections */
   .machine {
@@ -94,102 +228,59 @@
   }
 
   .machine-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    cursor: pointer;
-    user-select: none;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; cursor: pointer; user-select: none;
   }
   .machine-header:hover { background: rgba(255,255,255,0.03); }
 
   .machine-name {
-    font-weight: 600;
-    font-size: 15px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-weight: 600; font-size: 15px;
+    display: flex; align-items: center; gap: 8px;
   }
 
   .machine-name .chevron {
-    font-size: 12px;
-    transition: transform 0.15s;
-    color: var(--text-dim);
+    font-size: 12px; transition: transform 0.15s; color: var(--text-dim);
   }
   .machine.collapsed .chevron { transform: rotate(-90deg); }
 
   .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
   }
   .status-dot.online { background: var(--green); }
   .status-dot.offline { background: var(--red); }
 
-  .machine-meta {
-    font-size: 12px;
-    color: var(--text-dim);
-  }
+  .machine-meta { font-size: 12px; color: var(--text-dim); }
 
-  .machine-body {
-    padding: 0 16px 16px;
-  }
+  .machine-body { padding: 0 16px 16px; }
   .machine.collapsed .machine-body { display: none; }
 
   .machine-error {
-    color: var(--red);
-    font-size: 13px;
-    padding: 8px 12px;
-    background: rgba(248, 81, 73, 0.1);
-    border-radius: 6px;
+    color: var(--red); font-size: 13px; padding: 8px 12px;
+    background: rgba(248,81,73,0.1); border-radius: 6px;
   }
 
   .empty-state {
-    color: var(--text-dim);
-    font-size: 13px;
-    text-align: center;
-    padding: 24px;
+    color: var(--text-dim); font-size: 13px;
+    text-align: center; padding: 24px;
   }
 
   /* Agent nodes */
-  .agent-node {
-    position: relative;
-    padding-left: 20px;
-  }
+  .agent-node { position: relative; padding-left: 20px; }
 
   .agent-node:before {
-    content: '';
-    position: absolute;
-    left: 6px;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: var(--border);
+    content: ''; position: absolute; left: 6px; top: 0; bottom: 0;
+    width: 1px; background: var(--border);
   }
-
-  .agent-node:last-child:before {
-    bottom: calc(100% - 20px);
-  }
+  .agent-node:last-child:before { bottom: calc(100% - 20px); }
 
   .agent-node > .agent-card:before {
-    content: '';
-    position: absolute;
-    left: -14px;
-    top: 18px;
-    width: 12px;
-    height: 1px;
-    background: var(--border);
+    content: ''; position: absolute; left: -14px; top: 18px;
+    width: 12px; height: 1px; background: var(--border);
   }
 
-  /* Top-level agents have no tree line */
-  .agent-tree > .agent-node {
-    padding-left: 0;
-  }
+  .agent-tree > .agent-node { padding-left: 0; }
   .agent-tree > .agent-node:before,
-  .agent-tree > .agent-node > .agent-card:before {
-    display: none;
-  }
+  .agent-tree > .agent-node > .agent-card:before { display: none; }
 
   .agent-card {
     position: relative;
@@ -198,108 +289,64 @@
     border-radius: 6px;
     padding: 10px 14px;
     margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s;
   }
+  .agent-card:hover { border-color: var(--text-dim); }
+  .agent-card.selected { border-color: var(--blue); background: rgba(88,166,255,0.05); }
 
   .agent-top {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   }
 
-  .agent-icon {
-    font-size: 16px;
-    flex-shrink: 0;
-  }
-
-  .agent-type {
-    font-weight: 600;
-    font-size: 13px;
-  }
+  .agent-icon { font-size: 16px; flex-shrink: 0; }
+  .agent-type { font-weight: 600; font-size: 13px; }
 
   .agent-pid {
-    font-size: 11px;
-    color: var(--text-dim);
-    background: var(--bar-bg);
-    padding: 1px 6px;
-    border-radius: 4px;
+    font-size: 11px; color: var(--text-dim); background: var(--bar-bg);
+    padding: 1px 6px; border-radius: 4px;
     font-family: 'SF Mono', Menlo, monospace;
   }
 
   .agent-model {
-    font-size: 11px;
-    color: var(--blue);
-    background: rgba(88, 166, 255, 0.1);
-    padding: 1px 6px;
-    border-radius: 4px;
+    font-size: 11px; color: var(--blue);
+    background: rgba(88,166,255,0.1);
+    padding: 1px 6px; border-radius: 4px;
   }
 
-  .agent-summary {
-    font-size: 13px;
-    color: var(--text);
-    margin-top: 4px;
-    line-height: 1.4;
-  }
+  .agent-summary { font-size: 13px; color: var(--text); margin-top: 4px; line-height: 1.4; }
 
   .agent-dir {
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-top: 4px;
-    font-family: 'SF Mono', Menlo, monospace;
-    word-break: break-all;
+    font-size: 11px; color: var(--text-dim); margin-top: 4px;
+    font-family: 'SF Mono', Menlo, monospace; word-break: break-all;
   }
 
-  /* Context bar */
-  .context-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 6px;
-  }
+  .context-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 
   .context-label {
-    font-size: 11px;
-    color: var(--text-dim);
-    white-space: nowrap;
-    min-width: 42px;
+    font-size: 11px; color: var(--text-dim); white-space: nowrap; min-width: 42px;
   }
 
   .context-bar {
-    flex: 1;
-    height: 6px;
-    background: var(--bar-bg);
-    border-radius: 3px;
-    overflow: hidden;
-    max-width: 200px;
+    flex: 1; height: 6px; background: var(--bar-bg);
+    border-radius: 3px; overflow: hidden; max-width: 200px;
   }
 
-  .context-fill {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.3s;
-  }
-
+  .context-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
   .context-fill.low { background: var(--bar-fill); }
   .context-fill.mid { background: var(--bar-warn); }
   .context-fill.high { background: var(--bar-crit); }
 
   .context-tokens {
-    font-size: 10px;
-    color: var(--text-dim);
+    font-size: 10px; color: var(--text-dim);
     font-family: 'SF Mono', Menlo, monospace;
   }
 
-  .children {
-    margin-top: 8px;
-    margin-left: 8px;
-  }
+  .children { margin-top: 8px; margin-left: 8px; }
 
-  /* Footer */
   footer {
-    margin-top: 32px;
-    text-align: center;
-    font-size: 12px;
-    color: var(--text-dim);
+    text-align: center; font-size: 12px; color: var(--text-dim);
+    padding: 12px; border-top: 1px solid var(--border); flex-shrink: 0;
   }
 </style>
 </head>
@@ -317,9 +364,21 @@
     </div>
   </header>
 
-  <main id="content">
-    <div class="empty-state">Loading...</div>
-  </main>
+  <div class="main-layout">
+    <div class="agent-list" id="content">
+      <div class="empty-state">Loading...</div>
+    </div>
+
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-header">
+        <h2 id="detail-title">Session</h2>
+        <button class="detail-close" onclick="closeDetail()">&times;</button>
+      </div>
+      <div class="detail-body" id="detail-body">
+        <div class="detail-loading">Select an agent to view conversation</div>
+      </div>
+    </div>
+  </div>
 
   <footer>Agent Monitor — OpenClaw & Claude Code Dashboard</footer>
 
@@ -327,6 +386,7 @@
 const REFRESH_MS = 5000;
 let autoRefreshTimer = null;
 let isLoading = false;
+let selectedAgentId = null;
 
 function formatTokens(n) {
   if (n == null) return '?';
@@ -341,54 +401,69 @@ function contextFillClass(pct) {
   return 'low';
 }
 
-function renderAgent(agent, isRoot) {
+function truncate(s, max) {
+  if (!s) return '';
+  return s.length > max ? s.slice(0, max) + '...' : s;
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  } catch { return ''; }
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escapeAttr(s) {
+  return s.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+// ── Agent list rendering ──
+
+function renderAgent(agent) {
   const icon = agent.type === 'openclaw' ? '🤖' : '💻';
   const typeName = agent.type === 'openclaw' ? 'OpenClaw' : 'Claude Code';
+  const isSelected = selectedAgentId === agent.id;
+  const canClick = agent.type === 'claude_code' && agent.working_dir;
 
   let contextHtml = '';
   if (agent.context_percent != null) {
     const pct = Math.min(agent.context_percent, 100);
-    const cls = contextFillClass(pct);
     contextHtml = `
       <div class="context-row">
         <span class="context-label">${pct.toFixed(1)}%</span>
         <div class="context-bar">
-          <div class="context-fill ${cls}" style="width:${pct}%"></div>
+          <div class="context-fill ${contextFillClass(pct)}" style="width:${pct}%"></div>
         </div>
         <span class="context-tokens">${formatTokens(agent.context_tokens)} / ${formatTokens(agent.context_window)}</span>
       </div>`;
   }
 
-  const modelHtml = agent.model
-    ? `<span class="agent-model">${agent.model}</span>`
-    : '';
-
-  const summaryHtml = agent.summary
-    ? `<div class="agent-summary">${escapeHtml(agent.summary)}</div>`
-    : '';
-
-  const dirHtml = agent.working_dir
-    ? `<div class="agent-dir">${escapeHtml(agent.working_dir)}</div>`
-    : '';
-
-  const childrenHtml = agent.children.length > 0
-    ? `<div class="children">${agent.children.map(c => renderAgent(c, false)).join('')}</div>`
+  const clickHandler = canClick
+    ? `onclick="selectAgent('${agent.id}', '${escapeHtml(agent.working_dir)}', '${escapeHtml(typeName)}', event)"`
     : '';
 
   return `
     <div class="agent-node">
-      <div class="agent-card">
+      <div class="agent-card ${isSelected ? 'selected' : ''}" ${clickHandler}>
         <div class="agent-top">
           <span class="agent-icon">${icon}</span>
           <span class="agent-type">${typeName}</span>
           <span class="agent-pid">PID ${agent.pid}</span>
-          ${modelHtml}
+          ${agent.model ? `<span class="agent-model">${agent.model}</span>` : ''}
         </div>
-        ${summaryHtml}
+        ${agent.summary ? `<div class="agent-summary">${escapeHtml(agent.summary)}</div>` : ''}
         ${contextHtml}
-        ${dirHtml}
+        ${agent.working_dir ? `<div class="agent-dir">${escapeHtml(agent.working_dir)}</div>` : ''}
       </div>
-      ${childrenHtml}
+      ${agent.children.length > 0
+        ? `<div class="children">${agent.children.map(c => renderAgent(c)).join('')}</div>`
+        : ''}
     </div>`;
 }
 
@@ -404,7 +479,7 @@ function renderMachine(machine) {
   } else if (machine.agents.length === 0) {
     bodyHtml = `<div class="empty-state">No agents running</div>`;
   } else {
-    bodyHtml = `<div class="agent-tree">${machine.agents.map(a => renderAgent(a, true)).join('')}</div>`;
+    bodyHtml = `<div class="agent-tree">${machine.agents.map(a => renderAgent(a)).join('')}</div>`;
   }
 
   return `
@@ -431,14 +506,94 @@ function toggleMachine(header) {
   header.parentElement.classList.toggle('collapsed');
 }
 
-function escapeHtml(s) {
-  if (!s) return '';
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// ── Detail panel ──
+
+async function selectAgent(agentId, cwd, typeName, event) {
+  event.stopPropagation();
+  selectedAgentId = agentId;
+
+  // Highlight selected card
+  document.querySelectorAll('.agent-card.selected').forEach(el => el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+
+  const panel = document.getElementById('detail-panel');
+  const body = document.getElementById('detail-body');
+  const title = document.getElementById('detail-title');
+
+  title.textContent = typeName + ' Session';
+  body.innerHTML = '<div class="detail-loading">Loading messages...</div>';
+  panel.classList.add('open');
+
+  try {
+    const resp = await fetch(`/api/session?cwd=${encodeURIComponent(cwd)}`);
+    const data = await resp.json();
+
+    if (!data.messages || data.messages.length === 0) {
+      body.innerHTML = '<div class="detail-loading">No messages found</div>';
+      return;
+    }
+
+    // Filter: show user messages + last assistant message
+    const userMsgs = data.messages.filter(m => m.type === 'user');
+    const assistantMsgs = data.messages.filter(m => m.type === 'assistant');
+    const lastAssistant = assistantMsgs.length > 0 ? assistantMsgs[assistantMsgs.length - 1] : null;
+
+    // Build display list: all user messages, then last assistant
+    // But show them in chronological order, with non-user/non-last-assistant collapsed
+    const lastAssistantTs = lastAssistant ? lastAssistant.timestamp : null;
+
+    let html = `<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">${data.total} messages total — showing ${userMsgs.length} user + last assistant</div>`;
+
+    for (const msg of data.messages) {
+      const isUser = msg.type === 'user';
+      const isLastAssistant = msg.type === 'assistant' && msg.timestamp === lastAssistantTs;
+
+      // Skip non-user, non-last-assistant
+      if (!isUser && !isLastAssistant) continue;
+
+      // Skip tool_result-only user messages (show only real user input)
+      const text = msg.text || '';
+      if (isUser && text.startsWith('[tool_result')) continue;
+
+      const preview = truncate(text.replace(/\n/g, ' '), 80);
+      const isCollapsed = isUser && msg !== userMsgs[0] && msg !== userMsgs[userMsgs.length - 1];
+      const collClass = isCollapsed ? 'collapsed' : '';
+
+      let prLinksHtml = '';
+      if (msg.pr_links && msg.pr_links.length > 0) {
+        prLinksHtml = `<div class="msg-pr-links">${msg.pr_links.map(url => {
+          const label = url.replace('https://github.com/', '').replace('/pull/', '#');
+          return `<a class="pr-link" href="${escapeHtml(url)}" target="_blank">PR ${escapeHtml(label)}</a>`;
+        }).join('')}</div>`;
+      }
+
+      html += `
+        <div class="msg-item ${msg.type} ${collClass}">
+          <div class="msg-header" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="msg-role">${msg.type}</span>
+            <span class="msg-time">${formatTime(msg.timestamp)}</span>
+            <span class="msg-preview">${escapeHtml(preview)}</span>
+            <span class="msg-chevron">▼</span>
+          </div>
+          <div class="msg-body">${escapeHtml(text)}</div>
+          ${prLinksHtml}
+        </div>`;
+    }
+
+    body.innerHTML = html;
+
+  } catch (e) {
+    body.innerHTML = `<div class="detail-loading" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
 }
 
-function escapeAttr(s) {
-  return s.replace(/[^a-zA-Z0-9_-]/g, '_');
+function closeDetail() {
+  selectedAgentId = null;
+  document.getElementById('detail-panel').classList.remove('open');
+  document.querySelectorAll('.agent-card.selected').forEach(el => el.classList.remove('selected'));
 }
+
+// ── Main refresh ──
 
 async function refresh() {
   if (isLoading) return;
@@ -448,18 +603,16 @@ async function refresh() {
   try {
     const resp = await fetch('/api/status');
     const data = await resp.json();
-
     const content = document.getElementById('content');
+
     if (data.machines.length === 0) {
       content.innerHTML = '<div class="empty-state">No machines configured</div>';
     } else {
-      // Remember collapsed state
       const collapsed = new Set();
       document.querySelectorAll('.machine.collapsed').forEach(el => collapsed.add(el.id));
 
       content.innerHTML = data.machines.map(m => renderMachine(m)).join('');
 
-      // Restore collapsed state
       collapsed.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('collapsed');
@@ -485,18 +638,13 @@ function startAutoRefresh() {
 }
 
 function stopAutoRefresh() {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
+  if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
 }
 
 document.getElementById('auto-refresh').addEventListener('change', function() {
-  if (this.checked) startAutoRefresh();
-  else stopAutoRefresh();
+  if (this.checked) startAutoRefresh(); else stopAutoRefresh();
 });
 
-// Initial load
 refresh();
 startAutoRefresh();
 </script>

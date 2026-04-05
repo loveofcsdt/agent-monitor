@@ -781,6 +781,141 @@ async def get_status():
     }
 
 
+PR_LINK_RE = re.compile(
+    r"https://github\.com/[^\s/]+/[^\s/]+/pull/\d+"
+    r"|(?:^|\s)([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+#\d+)"
+    r"|(?:^|\s)#(\d+)",
+    re.MULTILINE,
+)
+
+
+def _extract_text(content: Any) -> str:
+    """Extract plain text from a message content field."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                if block.get("type") == "text":
+                    parts.append(block.get("text", ""))
+                elif block.get("type") == "tool_result":
+                    parts.append(f"[tool_result: {block.get('tool_use_id', '')[:8]}]")
+                elif block.get("type") == "image":
+                    parts.append("[image]")
+            elif isinstance(block, str):
+                parts.append(block)
+        return "\n".join(parts)
+    return str(content) if content else ""
+
+
+def _extract_pr_links(text: str) -> list[str]:
+    """Find GitHub PR links in text."""
+    links = []
+    # Full URLs
+    for m in re.finditer(
+        r"https://github\.com/[^\s/]+/[^\s/]+/pull/\d+", text
+    ):
+        links.append(m.group(0))
+    # owner/repo#123 format
+    for m in re.finditer(r"(?:^|\s)([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+#\d+)", text):
+        ref = m.group(1)
+        owner_repo, num = ref.rsplit("#", 1)
+        links.append(f"https://github.com/{owner_repo}/pull/{num}")
+    return list(dict.fromkeys(links))  # dedupe preserving order
+
+
+def _read_session_messages(cwd: str) -> list[dict]:
+    """Read session messages, returning user msgs + last assistant text."""
+    if not cwd or not CLAUDE_HOME.exists():
+        return []
+
+    encoded = cwd.replace("/", "-")
+    project_dir = CLAUDE_HOME / "projects" / encoded
+    if not project_dir.is_dir():
+        return []
+
+    # Find active session
+    session_id = None
+    sid_file = project_dir / "session_id"
+    if sid_file.exists():
+        session_id = sid_file.read_text().strip()
+
+    session_file = None
+    if session_id:
+        candidate = project_dir / f"{session_id}.jsonl"
+        if candidate.exists():
+            session_file = candidate
+    if not session_file:
+        jsonl_files = sorted(
+            project_dir.glob("*.jsonl"),
+            key=lambda f: f.stat().st_mtime, reverse=True,
+        )
+        if jsonl_files:
+            session_file = jsonl_files[0]
+
+    if not session_file:
+        return []
+
+    messages: list[dict] = []
+    try:
+        with open(session_file) as f:
+            lines = f.readlines()
+
+        for line in lines:
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            msg_type = entry.get("type")
+            if msg_type not in ("user", "assistant"):
+                continue
+
+            msg = entry.get("message", {})
+            if not isinstance(msg, dict):
+                continue
+
+            content = msg.get("content", "")
+            text = _extract_text(content)
+            if not text.strip():
+                continue
+
+            ts = entry.get("timestamp", "")
+            pr_links = _extract_pr_links(text)
+
+            # For assistant, extract only the text blocks (skip thinking/tool_use)
+            if msg_type == "assistant" and isinstance(content, list):
+                text_parts = []
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text_parts.append(block.get("text", ""))
+                text = "\n".join(text_parts)
+                if not text.strip():
+                    continue
+
+            messages.append({
+                "type": msg_type,
+                "text": text[:3000],  # cap size for API response
+                "timestamp": ts,
+                "pr_links": pr_links,
+            })
+    except Exception:
+        return []
+
+    return messages
+
+
+@app.get("/api/session")
+async def get_session_messages(cwd: str = ""):
+    """Return conversation messages for a Claude Code session."""
+    if not cwd:
+        return {"messages": [], "error": "cwd required"}
+
+    messages = _read_session_messages(cwd)
+    return {"messages": messages, "total": len(messages)}
+
+
 # ──────────────────────────────────────────────
 # Entry Point
 # ──────────────────────────────────────────────
